@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Earny</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="logo">Earny</h1>
+      <span class="tagline">Earn Your Screen Time</span>
+    </header>
+
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="not-configured" class="section hidden">
+      <p class="message">Please configure your Earny server URL:</p>
+      <input type="text" id="api-url" placeholder="https://your-app.vercel.app" class="input">
+      <button id="save-url" class="btn btn-primary">Save</button>
+    </div>
+
+    <div id="not-logged-in" class="section hidden">
+      <p class="message">You need to log in to Earny to track your credits.</p>
+      <button id="login-btn" class="btn btn-primary">Log In</button>
+    </div>
+
+    <div id="main-content" class="section hidden">
+      <div class="balance-card">
+        <span class="balance-label">Your Balance</span>
+        <span id="balance" class="balance-value">--</span>
+        <span class="balance-unit">credits</span>
+      </div>
+
+      <div id="tracking-status" class="tracking hidden">
+        <div class="tracking-indicator"></div>
+        <span>Tracking video: <span id="tracking-minutes">0</span> min</span>
+      </div>
+
+      <div class="actions">
+        <button id="dashboard-btn" class="btn btn-secondary">Open Dashboard</button>
+        <button id="refresh-btn" class="btn btn-outline">Refresh Balance</button>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <button id="settings-btn" class="link-btn">Settings</button>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
