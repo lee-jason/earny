@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Platform, SPENDING_CONFIG, calculateSpendingCost } from "@/config/spending";
+import { corsResponse, corsOptionsResponse } from "@/lib/cors";
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get("origin");
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return corsResponse(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      origin
+    );
   }
 
   const body = await request.json();
@@ -19,13 +24,19 @@ export async function POST(request: NextRequest) {
   };
 
   if (!platform || !SPENDING_CONFIG[platform]) {
-    return NextResponse.json({ error: "Invalid platform" }, { status: 400 });
+    return corsResponse(
+      NextResponse.json({ error: "Invalid platform" }, { status: 400 }),
+      origin
+    );
   }
 
   if (typeof durationMinutes !== "number" || durationMinutes <= 0) {
-    return NextResponse.json(
-      { error: "Duration must be a positive number" },
-      { status: 400 }
+    return corsResponse(
+      NextResponse.json(
+        { error: "Duration must be a positive number" },
+        { status: 400 }
+      ),
+      origin
     );
   }
 
@@ -37,13 +48,16 @@ export async function POST(request: NextRequest) {
   });
 
   if (!user || user.balance < cost) {
-    return NextResponse.json(
-      {
-        error: "Insufficient balance",
-        required: cost,
-        available: user?.balance ?? 0,
-      },
-      { status: 402 }
+    return corsResponse(
+      NextResponse.json(
+        {
+          error: "Insufficient balance",
+          required: cost,
+          available: user?.balance ?? 0,
+        },
+        { status: 402 }
+      ),
+      origin
     );
   }
 
@@ -70,9 +84,17 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json({
-    transaction,
-    newBalance: updatedUser.balance,
-    creditsSpent: cost,
-  });
+  return corsResponse(
+    NextResponse.json({
+      transaction,
+      newBalance: updatedUser.balance,
+      creditsSpent: cost,
+    }),
+    origin
+  );
+}
+
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return corsOptionsResponse(origin);
 }

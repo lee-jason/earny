@@ -1,4 +1,4 @@
-// Earny Popup Script
+// Earny Popup Script (Firefox)
 
 const elements = {
   loading: document.getElementById("loading"),
@@ -23,23 +23,19 @@ function showSection(section) {
 
 // Fetch balance from background script
 async function fetchBalance() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "getBalance" }, resolve);
-  });
+  return browser.runtime.sendMessage({ action: "getBalance" });
 }
 
 // Get tracking status from background script
 async function getTrackingStatus() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: "getTrackingStatus" }, resolve);
-  });
+  return browser.runtime.sendMessage({ action: "getTrackingStatus" });
 }
 
 // Update tracking display
 async function updateTrackingDisplay() {
   const status = await getTrackingStatus();
 
-  if (status && status.isTracking) {
+  if (status.isTracking) {
     elements.trackingStatus.classList.remove("hidden");
     elements.trackingMinutes.textContent = status.accumulatedMinutes;
   } else {
@@ -53,32 +49,33 @@ async function init() {
 
   const balanceData = await fetchBalance();
 
-  // Show login screen if not logged in OR any error occurs
-  if (!balanceData || balanceData.error) {
+  if (balanceData.error === "Not logged in") {
     showSection(elements.notLoggedIn);
     return;
   }
 
-  if (balanceData.balance !== undefined) {
-    elements.balance.textContent = balanceData.balance.toLocaleString();
+  if (balanceData.error) {
+    elements.balance.textContent = "Error";
     showSection(elements.mainContent);
-    updateTrackingDisplay();
-
-    // Update tracking display every second
-    setInterval(updateTrackingDisplay, 1000);
-  } else {
-    showSection(elements.notLoggedIn);
+    return;
   }
+
+  elements.balance.textContent = balanceData.balance.toLocaleString();
+  showSection(elements.mainContent);
+  updateTrackingDisplay();
+
+  // Update tracking display every second
+  setInterval(updateTrackingDisplay, 1000);
 }
 
 // Login button
 elements.loginBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ action: "openLogin" });
+  browser.runtime.sendMessage({ action: "openLogin" });
 });
 
 // Dashboard button
 elements.dashboardBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ action: "openDashboard" });
+  browser.runtime.sendMessage({ action: "openDashboard" });
 });
 
 // Refresh button
@@ -86,10 +83,12 @@ elements.refreshBtn.addEventListener("click", async () => {
   elements.balance.textContent = "...";
   const balanceData = await fetchBalance();
 
-  if (balanceData && balanceData.balance !== undefined) {
+  if (balanceData.balance !== undefined) {
     elements.balance.textContent = balanceData.balance.toLocaleString();
-  } else {
+  } else if (balanceData.error === "Not logged in") {
     showSection(elements.notLoggedIn);
+  } else {
+    elements.balance.textContent = "Error";
   }
 });
 

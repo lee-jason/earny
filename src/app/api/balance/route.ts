@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { corsResponse, corsOptionsResponse } from "@/lib/cors";
 
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin");
   const session = await auth();
 
   if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return corsResponse(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      origin
+    );
   }
 
   const user = await prisma.user.findUnique({
@@ -15,19 +20,19 @@ export async function GET(request: NextRequest) {
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return corsResponse(
+      NextResponse.json({ error: "User not found" }, { status: 404 }),
+      origin
+    );
   }
 
-  return NextResponse.json({ balance: user.balance });
+  return corsResponse(
+    NextResponse.json({ balance: user.balance }),
+    origin
+  );
 }
 
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    },
-  });
+export async function OPTIONS(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  return corsOptionsResponse(origin);
 }

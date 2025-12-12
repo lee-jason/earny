@@ -1,9 +1,7 @@
-// Earny Background Service Worker
+// Earny Background Script (Firefox)
 // Handles balance tracking and video time deductions
 
-// Import config
-importScripts("config.js");
-
+// CONFIG is loaded from config.js via manifest
 const API_BASE = CONFIG.API_BASE;
 
 // State
@@ -15,9 +13,48 @@ let accumulatedMinutes = 0;
 // Get session cookie from the API domain
 async function getSessionCookie() {
   try {
-    // Try with URL first (works better for localhost)
-    const cookies = await chrome.cookies.getAll({ url: API_BASE });
-    console.log("All cookies for", API_BASE, ":", cookies);
+    const url = new URL(API_BASE);
+
+    // Try multiple approaches to get cookies
+    let cookies = [];
+
+    // Approach 1: By URL
+    try {
+      cookies = await browser.cookies.getAll({ url: API_BASE });
+      console.log("Cookies by URL:", cookies);
+    } catch (e) {
+      console.log("URL approach failed:", e);
+    }
+
+    // Approach 2: By domain with firstPartyDomain
+    if (cookies.length === 0) {
+      try {
+        cookies = await browser.cookies.getAll({
+          domain: url.hostname,
+          firstPartyDomain: null
+        });
+        console.log("Cookies by domain with firstPartyDomain:", cookies);
+      } catch (e) {
+        console.log("Domain approach failed:", e);
+      }
+    }
+
+    // Approach 3: Get all cookies and filter
+    if (cookies.length === 0) {
+      try {
+        const allCookies = await browser.cookies.getAll({});
+        cookies = allCookies.filter(c =>
+          c.domain === url.hostname ||
+          c.domain === "localhost" ||
+          c.domain === ".localhost"
+        );
+        console.log("Filtered from all cookies:", cookies);
+      } catch (e) {
+        console.log("All cookies approach failed:", e);
+      }
+    }
+
+    console.log("Final cookies:", cookies);
     const sessionCookie = cookies.find(c => c.name === "authjs.session-token");
     return sessionCookie?.value;
   } catch (error) {
@@ -109,14 +146,14 @@ function startTracking(tabId) {
   accumulatedMinutes = 0;
 
   // Set up periodic check every minute
-  chrome.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+  browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
 }
 
 // Stop tracking and spend credits
 async function stopTracking() {
   if (!isTracking) return;
 
-  chrome.alarms.clear("earny-minute-check");
+  browser.alarms.clear("earny-minute-check");
 
   const elapsedMs = Date.now() - trackingStartTime;
   const totalMinutes = Math.floor(elapsedMs / 60000) + accumulatedMinutes;
@@ -124,7 +161,7 @@ async function stopTracking() {
   if (totalMinutes > 0 && currentTab) {
     // Get tab info for video details
     try {
-      const tab = await chrome.tabs.get(currentTab);
+      const tab = await browser.tabs.get(currentTab);
       const platform = detectPlatform(tab.url);
 
       if (platform) {
@@ -142,7 +179,7 @@ async function stopTracking() {
 }
 
 // Handle alarm (minute check)
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "earny-minute-check" && isTracking) {
     accumulatedMinutes++;
 
@@ -151,7 +188,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (balanceData.balance !== undefined && balanceData.balance <= 0) {
       // Out of credits - notify content script to pause video
       if (currentTab) {
-        chrome.tabs.sendMessage(currentTab, { action: "pauseVideo" });
+        browser.tabs.sendMessage(currentTab, { action: "pauseVideo" });
       }
       await stopTracking();
     }
@@ -159,29 +196,25 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // Handle messages from content script and popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  (async () => {
+browser.runtime.onMessage.addListener((message, sender) => {
+  return (async () => {
     switch (message.action) {
       case "getBalance":
-        const balance = await fetchBalance();
-        sendResponse(balance);
-        break;
+        return await fetchBalance();
 
       case "videoPlaying":
         if (sender.tab) {
           startTracking(sender.tab.id);
         }
-        sendResponse({ tracking: true });
-        break;
+        return { tracking: true };
 
       case "videoPaused":
       case "videoEnded":
         await stopTracking();
-        sendResponse({ tracking: false });
-        break;
+        return { tracking: false };
 
       case "getTrackingStatus":
-        sendResponse({
+        return {
           isTracking,
           currentTab,
           accumulatedMinutes:
@@ -189,36 +222,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             (trackingStartTime
               ? Math.floor((Date.now() - trackingStartTime) / 60000)
               : 0),
-        });
-        break;
+        };
 
       case "openLogin":
-        chrome.tabs.create({ url: `${API_BASE}/login` });
-        sendResponse({ success: true });
-        break;
+        browser.tabs.create({ url: `${API_BASE}/login` });
+        return { success: true };
 
       case "openDashboard":
-        chrome.tabs.create({ url: `${API_BASE}/dashboard` });
-        sendResponse({ success: true });
-        break;
+        browser.tabs.create({ url: `${API_BASE}/dashboard` });
+        return { success: true };
 
       default:
-        sendResponse({ error: "Unknown action" });
+        return { error: "Unknown action" };
     }
   })();
-
-  return true; // Keep channel open for async response
 });
 
 // Handle tab close
-chrome.tabs.onRemoved.addListener((tabId) => {
+browser.tabs.onRemoved.addListener((tabId) => {
   if (tabId === currentTab) {
     stopTracking();
   }
 });
 
 // Handle tab navigation
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (tabId === currentTab && changeInfo.url) {
     const platform = detectPlatform(changeInfo.url);
     if (!platform) {

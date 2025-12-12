@@ -3,6 +3,8 @@ import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "./prisma";
 
+const useSecureCookies = process.env.NEXTAUTH_URL?.startsWith("https://");
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -21,5 +23,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   pages: {
     signIn: "/login",
+  },
+  cookies: {
+    sessionToken: {
+      name: "authjs.session-token",
+      options: {
+        httpOnly: false, // Allow extension to read the cookie
+        sameSite: "lax",
+        path: "/",
+        secure: useSecureCookies,
+        domain: process.env.NODE_ENV === "development" ? undefined : undefined,
+      },
+    },
   },
 });
