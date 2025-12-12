@@ -156,6 +156,18 @@ The extension monitors video playback on YouTube and Twitch, deducting credits w
 2. Click "Load Temporary Add-on"
 3. Select any file in `extension-firefox/`
 
+### Updating the Extension
+
+When making changes to the extension code, **always update both versions**:
+- `extension/` - Chrome (Manifest v3)
+- `extension-firefox/` - Firefox (Manifest v2)
+
+The main differences between versions:
+- Chrome uses `manifest_version: 3` with a service worker (`background.js`)
+- Firefox uses `manifest_version: 2` with a background script
+
+After updating, sync the shared files (`content.js`, `config.js`, `popup/*`) to both directories.
+
 ### API Endpoints Used
 
 - `GET /api/balance` - Fetch current credit balance

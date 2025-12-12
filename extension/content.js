@@ -3,6 +3,7 @@
 
 let videoElement = null;
 let observer = null;
+let isBlocked = false;
 
 // Detect platform
 function getPlatform() {
@@ -66,17 +67,19 @@ function attachVideoListeners(video) {
 function pauseVideo() {
   if (videoElement) {
     videoElement.pause();
-    showOutOfCreditsOverlay();
   }
+  showBlockingOverlay();
 }
 
-// Show overlay when out of credits
-function showOutOfCreditsOverlay() {
+// Show blocking overlay when out of credits
+function showBlockingOverlay() {
   // Remove existing overlay if any
   const existingOverlay = document.getElementById("earny-overlay");
   if (existingOverlay) {
     existingOverlay.remove();
   }
+
+  isBlocked = true;
 
   const overlay = document.createElement("div");
   overlay.id = "earny-overlay";
@@ -87,7 +90,7 @@ function showOutOfCreditsOverlay() {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.9);
+      background: rgba(0, 0, 0, 0.95);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -96,12 +99,12 @@ function showOutOfCreditsOverlay() {
       color: white;
       font-family: system-ui, -apple-system, sans-serif;
     ">
-      <div style="font-size: 64px; margin-bottom: 20px;">⏸️</div>
+      <div style="font-size: 64px; margin-bottom: 20px;">🚫</div>
       <h1 style="font-size: 32px; margin: 0 0 16px 0;">Out of Credits!</h1>
       <p style="font-size: 18px; color: #aaa; margin: 0 0 24px 0; text-align: center; max-width: 400px;">
         You've run out of Earny credits. Log some fitness activities to earn more!
       </p>
-      <button id="earny-dismiss" style="
+      <button id="earny-dashboard" style="
         background: #6366f1;
         color: white;
         border: none;
@@ -111,15 +114,39 @@ function showOutOfCreditsOverlay() {
         cursor: pointer;
         font-weight: 500;
       ">
-        Got it
+        Go to Dashboard
       </button>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  document.getElementById("earny-dismiss").addEventListener("click", () => {
-    overlay.remove();
+  document.getElementById("earny-dashboard").addEventListener("click", () => {
+    chrome.runtime.sendMessage({ action: "openDashboard" });
+  });
+}
+
+// Remove blocking overlay
+function removeBlockingOverlay() {
+  const existingOverlay = document.getElementById("earny-overlay");
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+  isBlocked = false;
+}
+
+// Check balance and block if needed
+async function checkBalanceAndBlock() {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ action: "getBalance" }, (response) => {
+      if (response && response.balance !== undefined && response.balance <= 0) {
+        showBlockingOverlay();
+        resolve(true);
+      } else {
+        removeBlockingOverlay();
+        resolve(false);
+      }
+    });
   });
 }
 
@@ -152,9 +179,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Initialize
-function init() {
+async function init() {
   const platform = getPlatform();
   if (!platform) return;
+
+  // Check balance immediately on page load - block if no credits
+  const blocked = await checkBalanceAndBlock();
+  if (blocked) return;
 
   // Try to find video immediately
   const video = findVideo();

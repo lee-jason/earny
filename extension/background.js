@@ -112,28 +112,11 @@ function startTracking(tabId) {
   chrome.alarms.create("earny-minute-check", { periodInMinutes: 1 });
 }
 
-// Stop tracking and spend credits
+// Stop tracking (credits are already spent every minute via alarm)
 async function stopTracking() {
   if (!isTracking) return;
 
   chrome.alarms.clear("earny-minute-check");
-
-  const elapsedMs = Date.now() - trackingStartTime;
-  const totalMinutes = Math.floor(elapsedMs / 60000) + accumulatedMinutes;
-
-  if (totalMinutes > 0 && currentTab) {
-    // Get tab info for video details
-    try {
-      const tab = await chrome.tabs.get(currentTab);
-      const platform = detectPlatform(tab.url);
-
-      if (platform) {
-        await spendCredits(platform, totalMinutes, tab.url, tab.title);
-      }
-    } catch (e) {
-      // Tab might be closed
-    }
-  }
 
   isTracking = false;
   currentTab = null;
@@ -143,16 +126,25 @@ async function stopTracking() {
 
 // Handle alarm (minute check)
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "earny-minute-check" && isTracking) {
-    accumulatedMinutes++;
+  if (alarm.name === "earny-minute-check" && isTracking && currentTab) {
+    // Spend 1 credit for this minute
+    try {
+      const tab = await chrome.tabs.get(currentTab);
+      const platform = detectPlatform(tab.url);
 
-    // Check balance
-    const balanceData = await fetchBalance();
-    if (balanceData.balance !== undefined && balanceData.balance <= 0) {
-      // Out of credits - notify content script to pause video
-      if (currentTab) {
-        chrome.tabs.sendMessage(currentTab, { action: "pauseVideo" });
+      if (platform) {
+        const result = await spendCredits(platform, 1, tab.url, tab.title);
+
+        // Only stop if insufficient balance (402 error)
+        if (result.error === "Insufficient balance" ||
+            (result.newBalance !== undefined && result.newBalance <= 0)) {
+          chrome.tabs.sendMessage(currentTab, { action: "pauseVideo" });
+          await stopTracking();
+        }
+        // For other errors (network, auth), keep tracking - will retry next minute
       }
+    } catch (e) {
+      // Tab might be closed
       await stopTracking();
     }
   }
