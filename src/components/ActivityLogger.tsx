@@ -73,12 +73,12 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6">
-      <h2 className="text-lg font-semibold mb-4">Log Activity</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Log Activity</h2>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Activity Type
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -91,13 +91,13 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
                   onClick={() => handleActivityChange(type)}
                   className={`p-4 rounded-lg border-2 text-left transition-all ${
                     selectedActivity === type
-                      ? "border-indigo-500 bg-indigo-50"
-                      : "border-gray-200 hover:border-gray-300"
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30"
+                      : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
                   }`}
                 >
                   <span className="text-2xl">{config.icon}</span>
-                  <p className="font-medium mt-1">{config.name}</p>
-                  <p className="text-xs text-gray-500">{config.description}</p>
+                  <p className="font-medium mt-1 text-gray-900 dark:text-white">{config.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{config.description}</p>
                 </button>
               );
             })}
@@ -108,7 +108,7 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
           <>
             <div className="flex gap-4">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Amount
                 </label>
                 <input
@@ -117,19 +117,19 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
                   step="0.1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Enter amount"
                   disabled={selectedConfig.allowedUnits.includes("session")}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Unit
                 </label>
                 <select
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as MeasurementUnit)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {selectedConfig.allowedUnits.map((u) => (
                     <option key={u} value={u}>
@@ -140,10 +140,10 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
               </div>
             </div>
 
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
                 Credits you&apos;ll earn:{" "}
-                <span className="font-semibold text-indigo-600">
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
                   {amount
                     ? Math.floor(
                         parseFloat(amount) *
@@ -164,8 +164,8 @@ export function ActivityLogger({ onSuccess }: ActivityLoggerProps) {
           <div
             className={`p-3 rounded-md ${
               message.type === "success"
-                ? "bg-green-50 text-green-800"
-                : "bg-red-50 text-red-800"
+                ? "bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                : "bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-300"
             }`}
           >
             {message.text}

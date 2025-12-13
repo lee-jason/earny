@@ -21,7 +21,7 @@ export default function LedgerPage() {
   if (status === "loading") {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400" />
       </div>
     );
   }
@@ -34,8 +34,8 @@ export default function LedgerPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transaction Ledger</h1>
-          <p className="text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Transaction Ledger</h1>
+          <p className="text-gray-600 dark:text-gray-400">
             View your complete transaction history
           </p>
         </div>
@@ -45,7 +45,7 @@ export default function LedgerPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               filter === "all"
                 ? "bg-indigo-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
             }`}
           >
             All
@@ -55,7 +55,7 @@ export default function LedgerPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               filter === "EARNING"
                 ? "bg-green-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
             }`}
           >
             Earnings
@@ -65,7 +65,7 @@ export default function LedgerPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               filter === "SPENDING"
                 ? "bg-red-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
             }`}
           >
             Spending

@@ -17,24 +17,24 @@ export default function LoginPage() {
   if (status === "loading") {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400" />
       </div>
     );
   }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-sm p-8">
+      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Welcome to Earny</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Earny</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
             Sign in to start tracking your fitness and earning credits
           </p>
         </div>
 
         <button
           onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -57,7 +57,7 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        <p className="text-xs text-gray-500 text-center mt-6">
+        <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-6">
           By signing in, you agree to our Terms of Service and Privacy Policy
         </p>
       </div>

@@ -8,24 +8,24 @@ export function Navbar() {
   const { data: session, status } = useSession();
 
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link href="/" className="text-xl font-bold text-indigo-600">
+            <Link href="/" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
               Earny
             </Link>
             {session && (
               <div className="ml-10 flex items-center space-x-4">
                 <Link
                   href="/dashboard"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Dashboard
                 </Link>
                 <Link
                   href="/ledger"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Ledger
                 </Link>
@@ -34,7 +34,7 @@ export function Navbar() {
           </div>
           <div className="flex items-center">
             {status === "loading" ? (
-              <div className="h-8 w-8 animate-pulse bg-gray-200 rounded-full" />
+              <div className="h-8 w-8 animate-pulse bg-gray-200 dark:bg-gray-700 rounded-full" />
             ) : session ? (
               <div className="flex items-center space-x-4">
                 {session.user?.image && (
@@ -46,12 +46,12 @@ export function Navbar() {
                     className="rounded-full"
                   />
                 )}
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-gray-700 dark:text-gray-300">
                   {session.user?.name}
                 </span>
                 <button
                   onClick={() => signOut()}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 >
                   Sign out
                 </button>

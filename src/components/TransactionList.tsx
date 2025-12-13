@@ -137,10 +137,10 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
 
   if (loading && transactions.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
         <div className="animate-pulse space-y-4">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-100 rounded" />
+            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded" />
           ))}
         </div>
       </div>
@@ -149,9 +149,9 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
 
   if (transactions.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-        <p className="text-gray-500">No transactions yet</p>
-        <p className="text-sm text-gray-400 mt-1">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 text-center">
+        <p className="text-gray-500 dark:text-gray-400">No transactions yet</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
           Start logging activities to see your transaction history
         </p>
       </div>
@@ -159,32 +159,32 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Date
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Type
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Description
               </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Amount
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {displayTransactions.map((tx) => {
               if (isCollapsed(tx)) {
                 // Collapsed spending transaction
                 return (
-                  <tr key={tx.ids[0]} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                  <tr key={tx.ids[0]} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                       <div>
                         {new Date(tx.endTime).toLocaleDateString("en-US", {
                           month: "short",
@@ -193,16 +193,16 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
                           minute: "2-digit",
                         })}
                       </div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-gray-400 dark:text-gray-500">
                         {tx.count} min session
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
                         Spent
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                       <div className="max-w-md">
                         {tx.descriptions.slice(0, 3).map((desc, i) => (
                           <span key={i}>
@@ -211,13 +211,13 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
                           </span>
                         ))}
                         {tx.descriptions.length > 3 && (
-                          <span className="text-gray-500">
+                          <span className="text-gray-500 dark:text-gray-400">
                             {" "}+{tx.descriptions.length - 3} more
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right text-red-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right text-red-600 dark:text-red-400">
                       {tx.totalAmount.toLocaleString()}
                     </td>
                   </tr>
@@ -225,8 +225,8 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
               } else {
                 // Regular transaction
                 return (
-                  <tr key={tx.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {new Date(tx.createdAt).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
@@ -239,19 +239,19 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           tx.type === "EARNING"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
                         }`}
                       >
                         {tx.type === "EARNING" ? "Earned" : "Spent"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                       {tx.description || tx.activityType || "—"}
                     </td>
                     <td
                       className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
-                        tx.amount > 0 ? "text-green-600" : "text-red-600"
+                        tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                       }`}
                     >
                       {tx.amount > 0 ? "+" : ""}
@@ -266,8 +266,8 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
       </div>
 
       {pagination && pagination.totalPages > 1 && (
-        <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t">
-          <p className="text-sm text-gray-500">
+        <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-600">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Page {pagination.page} of {pagination.totalPages} ({pagination.total}{" "}
             total)
           </p>
@@ -275,7 +275,7 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50"
+              className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50"
             >
               Previous
             </button>
@@ -284,7 +284,7 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
                 setCurrentPage((p) => Math.min(pagination.totalPages, p + 1))
               }
               disabled={currentPage === pagination.totalPages}
-              className="px-3 py-1 text-sm border rounded hover:bg-gray-100 disabled:opacity-50"
+              className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50"
             >
               Next
             </button>
