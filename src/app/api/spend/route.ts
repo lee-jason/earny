@@ -68,8 +68,8 @@ export async function POST(request: NextRequest) {
 
   const config = SPENDING_CONFIG[platform];
   const description = videoTitle
-    ? `${config.name}: ${videoTitle} (${durationMinutes} min)${isWaived ? " [waived]" : ""}`
-    : `${config.name}: ${durationMinutes} minutes${isWaived ? " [waived]" : ""}`;
+    ? `${config.name}: ${videoTitle} (${durationMinutes} min)`
+    : `${config.name}: ${durationMinutes} minutes`;
 
   if (isWaived) {
     // Waived: log transaction but don't deduct balance

@@ -9,6 +9,7 @@ interface Transaction {
   amount: number;
   description: string | null;
   metadata: Record<string, unknown> | null;
+  waived: boolean;
   createdAt: string;
 }
 
@@ -62,7 +63,10 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
         <div className="animate-pulse space-y-4">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded" />
+            <div
+              key={i}
+              className="h-16 bg-gray-100 dark:bg-gray-700 rounded"
+            />
           ))}
         </div>
       </div>
@@ -102,7 +106,10 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {transactions.map((tx) => (
-              <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+              <tr
+                key={tx.id}
+                className="hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {new Date(tx.createdAt).toLocaleDateString("en-US", {
                     month: "short",
@@ -128,11 +135,21 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
                 </td>
                 <td
                   className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
-                    tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                    tx.waived
+                      ? "text-gray-400 dark:text-gray-500"
+                      : tx.amount > 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400"
                   }`}
                 >
-                  {tx.amount > 0 ? "+" : ""}
-                  {tx.amount.toLocaleString()}
+                  {tx.waived ? (
+                    `(-${Math.abs(tx.amount).toLocaleString()})`
+                  ) : (
+                    <>
+                      {tx.amount > 0 ? "+" : ""}
+                      {tx.amount.toLocaleString()}
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
@@ -143,8 +160,8 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
       {pagination && pagination.totalPages > 1 && (
         <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-600">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Page {pagination.page} of {pagination.totalPages} ({pagination.total}{" "}
-            total)
+            Page {pagination.page} of {pagination.totalPages} (
+            {pagination.total} total)
           </p>
           <div className="flex gap-2">
             <button

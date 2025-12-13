@@ -234,16 +234,17 @@ async function removePlayingTab(tabId) {
   }
 
   playingTabs.delete(tabId);
-  if (session && session.tabs[tabId]) {
-    delete session.tabs[tabId];
-  }
 
   console.log("[Earny] Removed tab", tabId, "- Remaining:", playingTabs.size);
 
-  // If no more playing tabs, end the session
+  // If no more playing tabs, end the session (keep tab info for commit)
   if (!isTracking()) {
     await endSession("all_videos_stopped");
   } else {
+    // Only delete tab info if session continues (other tabs still playing)
+    if (session && session.tabs[tabId]) {
+      delete session.tabs[tabId];
+    }
     await persistSession();
   }
 }

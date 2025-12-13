@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         amount: true,
         description: true,
         metadata: true,
+        waived: true,
         createdAt: true,
       },
     }),
