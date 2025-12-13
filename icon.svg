@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="coinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="sparkGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#A5B4FC"/>
+      <stop offset="100%" stop-color="#FFFFFF"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Main coin circle -->
+  <circle cx="64" cy="64" r="58" fill="url(#coinGradient)"/>
+  
+  <!-- Inner ring for coin effect -->
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#6366F1" stroke-width="3" opacity="0.5"/>
+  
+  <!-- Upward spark/bolt - represents energy, achievement, growth -->
+  <path d="M72 28L52 62H66L56 100L76 58H62L72 28Z" fill="url(#sparkGradient)"/>
+  
+  <!-- Small star accent at top -->
+  <circle cx="72" cy="28" r="4" fill="#FFFFFF" opacity="0.9"/>
+</svg>
