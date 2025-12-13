@@ -1,4 +1,4 @@
-// Earny Popup Script
+// Earny Popup Script (Chrome)
 
 const elements = {
   loading: document.getElementById("loading"),
@@ -7,6 +7,7 @@ const elements = {
   balance: document.getElementById("balance"),
   trackingStatus: document.getElementById("tracking-status"),
   trackingMinutes: document.getElementById("tracking-minutes"),
+  trackingTitle: document.getElementById("tracking-title"),
   loginBtn: document.getElementById("login-btn"),
   dashboardBtn: document.getElementById("dashboard-btn"),
   refreshBtn: document.getElementById("refresh-btn"),
@@ -39,9 +40,19 @@ async function getTrackingStatus() {
 async function updateTrackingDisplay() {
   const status = await getTrackingStatus();
 
-  if (status && status.isTracking) {
+  if (status.isTracking) {
     elements.trackingStatus.classList.remove("hidden");
     elements.trackingMinutes.textContent = status.accumulatedMinutes;
+
+    if (status.tabTitles && status.tabTitles.length > 0) {
+      // Show all playing tab titles, truncated
+      const titles = status.tabTitles.map(t =>
+        t.length > 35 ? t.substring(0, 35) + "..." : t
+      );
+      elements.trackingTitle.textContent = titles.join("\n");
+    } else {
+      elements.trackingTitle.textContent = "";
+    }
   } else {
     elements.trackingStatus.classList.add("hidden");
   }
@@ -53,22 +64,23 @@ async function init() {
 
   const balanceData = await fetchBalance();
 
-  // Show login screen if not logged in OR any error occurs
-  if (!balanceData || balanceData.error) {
+  if (balanceData.error === "Not logged in") {
     showSection(elements.notLoggedIn);
     return;
   }
 
-  if (balanceData.balance !== undefined) {
-    elements.balance.textContent = balanceData.balance.toLocaleString();
+  if (balanceData.error) {
+    elements.balance.textContent = "Error";
     showSection(elements.mainContent);
-    updateTrackingDisplay();
-
-    // Update tracking display every second
-    setInterval(updateTrackingDisplay, 1000);
-  } else {
-    showSection(elements.notLoggedIn);
+    return;
   }
+
+  elements.balance.textContent = balanceData.balance.toLocaleString();
+  showSection(elements.mainContent);
+  updateTrackingDisplay();
+
+  // Update tracking display every second
+  setInterval(updateTrackingDisplay, 1000);
 }
 
 // Login button
@@ -86,10 +98,12 @@ elements.refreshBtn.addEventListener("click", async () => {
   elements.balance.textContent = "...";
   const balanceData = await fetchBalance();
 
-  if (balanceData && balanceData.balance !== undefined) {
+  if (balanceData.balance !== undefined) {
     elements.balance.textContent = balanceData.balance.toLocaleString();
-  } else {
+  } else if (balanceData.error === "Not logged in") {
     showSection(elements.notLoggedIn);
+  } else {
+    elements.balance.textContent = "Error";
   }
 });
 

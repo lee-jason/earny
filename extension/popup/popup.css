@@ -149,7 +149,7 @@ body {
 
 .tracking {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 12px;
   background: #fef3c7;
@@ -161,9 +161,24 @@ body {
 .tracking-indicator {
   width: 8px;
   height: 8px;
+  margin-top: 4px;
   background: #f59e0b;
   border-radius: 50%;
   animation: pulse 2s infinite;
+  flex-shrink: 0;
+}
+
+.tracking-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tracking-title {
+  font-size: 11px;
+  color: #a16207;
+  word-break: break-word;
+  white-space: pre-line;
 }
 
 @keyframes pulse {

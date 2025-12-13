@@ -4,6 +4,7 @@
 let videoElement = null;
 let observer = null;
 let isBlocked = false;
+let videoCheckInterval = null;
 
 // Detect platform
 function getPlatform() {
@@ -25,41 +26,58 @@ function findVideo() {
   return null;
 }
 
-// Handle video play
-function onVideoPlay() {
-  chrome.runtime.sendMessage({ action: "videoPlaying" });
-}
+// Track last known playing state to avoid duplicate messages
+let lastPlayingState = null;
 
-// Handle video pause
-function onVideoPause() {
-  chrome.runtime.sendMessage({ action: "videoPaused" });
-}
+// Check video state and notify background
+function checkVideoState() {
+  const video = findVideo();
+  console.log("[Earny] checkVideoState - video found:", !!video);
 
-// Handle video ended
-function onVideoEnded() {
-  chrome.runtime.sendMessage({ action: "videoEnded" });
-}
-
-// Attach listeners to video element
-function attachVideoListeners(video) {
-  if (!video || video === videoElement) return;
-
-  // Remove old listeners if any
-  if (videoElement) {
-    videoElement.removeEventListener("play", onVideoPlay);
-    videoElement.removeEventListener("pause", onVideoPause);
-    videoElement.removeEventListener("ended", onVideoEnded);
+  if (!video) {
+    if (lastPlayingState !== false) {
+      console.log("[Earny] No video found, sending videoPaused");
+      lastPlayingState = false;
+      chrome.runtime.sendMessage({ action: "videoPaused" });
+    }
+    return;
   }
 
   videoElement = video;
+  const isPlaying = !video.paused && !video.ended;
+  console.log("[Earny] Video state - paused:", video.paused, "ended:", video.ended, "isPlaying:", isPlaying, "lastState:", lastPlayingState);
 
-  video.addEventListener("play", onVideoPlay);
-  video.addEventListener("pause", onVideoPause);
-  video.addEventListener("ended", onVideoEnded);
+  if (isPlaying !== lastPlayingState) {
+    lastPlayingState = isPlaying;
+    if (isPlaying) {
+      console.log("[Earny] State changed -> PLAYING, sending videoPlaying");
+      chrome.runtime.sendMessage({ action: "videoPlaying" });
+    } else {
+      console.log("[Earny] State changed -> PAUSED, sending videoPaused");
+      chrome.runtime.sendMessage({ action: "videoPaused" });
+    }
+  }
+}
 
-  // If video is already playing, notify
-  if (!video.paused) {
-    onVideoPlay();
+// Start polling for video state
+function startVideoPolling() {
+  if (videoCheckInterval) {
+    console.log("[Earny] Polling already running");
+    return;
+  }
+
+  console.log("[Earny] Starting video polling");
+  // Check immediately, then every 2 seconds
+  checkVideoState();
+  videoCheckInterval = setInterval(checkVideoState, 2000);
+}
+
+// Stop polling
+function stopVideoPolling() {
+  if (videoCheckInterval) {
+    console.log("[Earny] Stopping video polling");
+    clearInterval(videoCheckInterval);
+    videoCheckInterval = null;
   }
 }
 
@@ -158,8 +176,8 @@ function setupObserver() {
 
   observer = new MutationObserver(() => {
     const video = findVideo();
-    if (video) {
-      attachVideoListeners(video);
+    if (video && !videoCheckInterval) {
+      startVideoPolling();
     }
   });
 
@@ -183,17 +201,18 @@ async function init() {
   const platform = getPlatform();
   if (!platform) return;
 
+  // Reset state on init
+  lastPlayingState = null;
+  stopVideoPolling();
+
   // Check balance immediately on page load - block if no credits
   const blocked = await checkBalanceAndBlock();
   if (blocked) return;
 
-  // Try to find video immediately
-  const video = findVideo();
-  if (video) {
-    attachVideoListeners(video);
-  }
+  // Start polling for video state
+  startVideoPolling();
 
-  // Set up observer for dynamic content
+  // Set up observer for dynamic content (in case video loads later)
   setupObserver();
 }
 

@@ -7,6 +7,7 @@ const elements = {
   balance: document.getElementById("balance"),
   trackingStatus: document.getElementById("tracking-status"),
   trackingMinutes: document.getElementById("tracking-minutes"),
+  trackingTitle: document.getElementById("tracking-title"),
   loginBtn: document.getElementById("login-btn"),
   dashboardBtn: document.getElementById("dashboard-btn"),
   refreshBtn: document.getElementById("refresh-btn"),
@@ -38,6 +39,16 @@ async function updateTrackingDisplay() {
   if (status.isTracking) {
     elements.trackingStatus.classList.remove("hidden");
     elements.trackingMinutes.textContent = status.accumulatedMinutes;
+
+    if (status.tabTitles && status.tabTitles.length > 0) {
+      // Show all playing tab titles, truncated
+      const titles = status.tabTitles.map(t =>
+        t.length > 35 ? t.substring(0, 35) + "..." : t
+      );
+      elements.trackingTitle.textContent = titles.join("\n");
+    } else {
+      elements.trackingTitle.textContent = "";
+    }
   } else {
     elements.trackingStatus.classList.add("hidden");
   }

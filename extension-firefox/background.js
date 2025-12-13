@@ -4,11 +4,57 @@
 // CONFIG is loaded via manifest.json before this script
 const API_BASE = CONFIG.API_BASE;
 
-// State
-let isTracking = false;
-let currentTab = null;
+// State (will be restored from storage on wake)
+// Track multiple tabs: Set of tab IDs that are currently playing video
+let playingTabs = new Set();
 let trackingStartTime = null;
 let accumulatedMinutes = 0;
+
+// Persist state to storage (survives background script unload)
+async function saveState() {
+  await browser.storage.local.set({
+    earnyState: {
+      playingTabs: Array.from(playingTabs),
+      trackingStartTime,
+      accumulatedMinutes
+    }
+  });
+}
+
+// Restore state from storage
+async function restoreState() {
+  const data = await browser.storage.local.get("earnyState");
+  if (data.earnyState) {
+    playingTabs = new Set(data.earnyState.playingTabs || []);
+    trackingStartTime = data.earnyState.trackingStartTime || null;
+    accumulatedMinutes = data.earnyState.accumulatedMinutes || 0;
+    console.log("[Earny BG] Restored state - playingTabs:", Array.from(playingTabs));
+  } else {
+    console.log("[Earny BG] No saved state found");
+  }
+}
+
+// Check if any tabs are currently playing
+function isTracking() {
+  return playingTabs.size > 0;
+}
+
+// Restore state on script load
+console.log("[Earny BG] Background script loaded");
+restoreState().then(() => {
+  // Check if we should have an alarm running
+  if (isTracking()) {
+    console.log("[Earny BG] Was tracking, checking alarm status");
+    browser.alarms.get("earny-minute-check").then((alarm) => {
+      if (!alarm) {
+        console.log("[Earny BG] Alarm missing, recreating");
+        browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+      } else {
+        console.log("[Earny BG] Alarm exists:", alarm);
+      }
+    });
+  }
+});
 
 // Get session cookie from the API domain
 async function getSessionCookie() {
@@ -94,63 +140,115 @@ function detectPlatform(url) {
   return null;
 }
 
-// Start tracking video time
-function startTracking(tabId) {
-  if (isTracking) return;
+// Add a tab to tracking
+function addPlayingTab(tabId) {
+  const wasTracking = isTracking();
+  playingTabs.add(tabId);
+  console.log("[Earny BG] Added tab", tabId, "to playing tabs. Total:", playingTabs.size);
 
-  isTracking = true;
-  currentTab = tabId;
-  trackingStartTime = Date.now();
-  accumulatedMinutes = 0;
+  // Start alarm if this is the first playing tab
+  if (!wasTracking && isTracking()) {
+    trackingStartTime = Date.now();
+    accumulatedMinutes = 0;
+    browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+    console.log("[Earny BG] Started tracking, alarm created");
 
-  // Set up periodic check every minute
-  browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+    // Verify alarm was created
+    browser.alarms.get("earny-minute-check").then((alarm) => {
+      console.log("[Earny BG] Alarm verification:", alarm);
+    });
+  }
+
+  saveState();
 }
 
-// Stop tracking (credits are already spent every minute via alarm)
-async function stopTracking() {
-  if (!isTracking) return;
+// Remove a tab from tracking
+async function removePlayingTab(tabId) {
+  if (!playingTabs.has(tabId)) {
+    console.log("[Earny BG] Tab", tabId, "not in playing tabs, ignoring");
+    return;
+  }
 
+  playingTabs.delete(tabId);
+  console.log("[Earny BG] Removed tab", tabId, "from playing tabs. Remaining:", playingTabs.size);
+
+  // Stop alarm if no more playing tabs
+  if (!isTracking()) {
+    console.log("[Earny BG] No more playing tabs, stopping tracking");
+    browser.alarms.clear("earny-minute-check");
+    trackingStartTime = null;
+    accumulatedMinutes = 0;
+  }
+
+  saveState();
+}
+
+// Stop all tracking
+async function stopAllTracking() {
+  console.log("[Earny BG] Stopping all tracking");
+  playingTabs.clear();
   browser.alarms.clear("earny-minute-check");
-
-  isTracking = false;
-  currentTab = null;
   trackingStartTime = null;
   accumulatedMinutes = 0;
+  saveState();
 }
 
 // Handle alarm (minute check)
-browser.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "earny-minute-check" && isTracking && currentTab) {
-    // Spend 1 credit for this minute
-    browser.tabs.get(currentTab).then(async (tab) => {
-      if (!tab || !tab.url) {
-        await stopTracking();
-        return;
-      }
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  console.log("[Earny BG] Alarm fired:", alarm.name, "playingTabs:", Array.from(playingTabs));
 
-      const platform = detectPlatform(tab.url);
-
-      if (platform) {
-        const result = await spendCredits(platform, 1, tab.url, tab.title);
-
-        // Only stop if insufficient balance (402 error)
-        if (result.error === "Insufficient balance" ||
-            (result.newBalance !== undefined && result.newBalance <= 0)) {
-          browser.tabs.sendMessage(currentTab, { action: "pauseVideo" });
-          await stopTracking();
+  if (alarm.name === "earny-minute-check" && isTracking()) {
+    // Get first valid playing tab to determine platform for spending
+    let spendTab = null;
+    for (const tabId of playingTabs) {
+      try {
+        const tab = await browser.tabs.get(tabId);
+        if (tab && tab.url && detectPlatform(tab.url)) {
+          spendTab = tab;
+          break;
         }
-        // For other errors (network, auth), keep tracking - will retry next minute
+      } catch (e) {
+        // Tab might be closed, remove it
+        playingTabs.delete(tabId);
       }
-    }).catch(async () => {
-      // Tab might be closed
-      await stopTracking();
-    });
+    }
+
+    if (!spendTab) {
+      console.log("[Earny BG] No valid playing tabs found, stopping");
+      await stopAllTracking();
+      return;
+    }
+
+    const platform = detectPlatform(spendTab.url);
+    console.log("[Earny BG] Spending 1 credit for platform:", platform);
+
+    const result = await spendCredits(platform, 1, spendTab.url, spendTab.title);
+    console.log("[Earny BG] Spend result:", result);
+
+    // Only stop if insufficient balance (402 error)
+    if (result.error === "Insufficient balance" ||
+        (result.newBalance !== undefined && result.newBalance <= 0)) {
+      console.log("[Earny BG] Insufficient balance, pausing all videos");
+      // Pause all playing tabs
+      for (const tabId of playingTabs) {
+        try {
+          browser.tabs.sendMessage(tabId, { action: "pauseVideo" });
+        } catch (e) {
+          // Tab might be closed
+        }
+      }
+      await stopAllTracking();
+    }
+    // For other errors (network, auth), keep tracking - will retry next minute
+
+    saveState();
   }
 });
 
 // Handle messages from content script and popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("[Earny BG] Received message:", message.action, "from tab:", sender.tab?.id);
+
   (async () => {
     switch (message.action) {
       case "getBalance":
@@ -160,21 +258,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case "videoPlaying":
         if (sender.tab) {
-          startTracking(sender.tab.id);
+          addPlayingTab(sender.tab.id);
         }
         sendResponse({ tracking: true });
         break;
 
       case "videoPaused":
       case "videoEnded":
-        await stopTracking();
-        sendResponse({ tracking: false });
+        if (sender.tab) {
+          await removePlayingTab(sender.tab.id);
+        }
+        sendResponse({ tracking: !isTracking() });
         break;
 
       case "getTrackingStatus":
+        // Get titles of all playing tabs
+        let tabTitles = [];
+        for (const tabId of playingTabs) {
+          try {
+            const tab = await browser.tabs.get(tabId);
+            if (tab?.title) {
+              tabTitles.push(tab.title);
+            }
+          } catch (e) {
+            // Tab might be closed
+          }
+        }
         sendResponse({
-          isTracking,
-          currentTab,
+          isTracking: isTracking(),
+          playingTabs: Array.from(playingTabs),
+          tabTitles,
           accumulatedMinutes:
             accumulatedMinutes +
             (trackingStartTime
@@ -203,17 +316,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Handle tab close
 chrome.tabs.onRemoved.addListener((tabId) => {
-  if (tabId === currentTab) {
-    stopTracking();
+  if (playingTabs.has(tabId)) {
+    console.log("[Earny BG] Playing tab closed:", tabId);
+    removePlayingTab(tabId);
   }
 });
 
 // Handle tab navigation
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tabId === currentTab && changeInfo.url) {
+  if (playingTabs.has(tabId) && changeInfo.url) {
     const platform = detectPlatform(changeInfo.url);
     if (!platform) {
-      stopTracking();
+      console.log("[Earny BG] Tab", tabId, "navigated away from video platform");
+      removePlayingTab(tabId);
     }
   }
 });

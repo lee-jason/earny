@@ -168,14 +168,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case "videoPaused":
       case "videoEnded":
-        await stopTracking();
+        // Only stop tracking if the message is from the tab we're tracking
+        if (sender.tab && sender.tab.id === currentTab) {
+          await stopTracking();
+        }
         sendResponse({ tracking: false });
         break;
 
       case "getTrackingStatus":
+        // Get tab title if tracking
+        let tabTitle = null;
+        if (isTracking && currentTab) {
+          try {
+            const tab = await chrome.tabs.get(currentTab);
+            tabTitle = tab?.title || null;
+          } catch (e) {
+            // Tab might be closed
+          }
+        }
         sendResponse({
           isTracking,
           currentTab,
+          tabTitle,
           accumulatedMinutes:
             accumulatedMinutes +
             (trackingStartTime
