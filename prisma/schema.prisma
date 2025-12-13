@@ -67,6 +67,7 @@ model Transaction {
   amount       Int
   description  String?
   metadata     Json?
+  waived       Boolean         @default(false)
   createdAt    DateTime        @default(now())
 
   @@index([userId])

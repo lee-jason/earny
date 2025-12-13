@@ -5,54 +5,89 @@
 const API_BASE = CONFIG.API_BASE;
 
 // Session state (tracked in memory and persisted to storage)
-let activeSession = null; // { platform, videoUrl, videoTitle, startTime, minutes }
+// playingTabs: Set of tab IDs currently playing video
+// session: { startTime, minutes, tabs: { tabId: { platform, videoUrl, videoTitle } } }
+let playingTabs = new Set();
+let session = null;
+let recoveryInProgress = false;
+let waivedMode = false;
+
+// Load waived mode from storage on startup
+browser.storage.local.get("earnyWaivedMode").then((data) => {
+  waivedMode = data.earnyWaivedMode || false;
+  console.log("[Earny] Loaded waived mode:", waivedMode);
+});
 
 // Initialize: check for uncommitted session from previous run
-browser.runtime.onStartup.addListener(recoverUncommittedSession);
-browser.runtime.onInstalled.addListener(recoverUncommittedSession);
-
-// Also recover on script load
+// Only use direct call - onStartup/onInstalled can cause duplicate runs
 recoverUncommittedSession();
 
 // Recover and commit any uncommitted session from storage
 async function recoverUncommittedSession() {
+  // Prevent concurrent recovery attempts
+  if (recoveryInProgress) {
+    console.log("[Earny] Recovery already in progress, skipping");
+    return;
+  }
+  recoveryInProgress = true;
+
   try {
     const data = await browser.storage.local.get("earnyUncommittedSession");
-    const session = data.earnyUncommittedSession;
+    const savedSession = data.earnyUncommittedSession;
 
-    if (session && session.minutes > 0) {
-      console.log("[Earny] Recovering uncommitted session:", session);
+    if (savedSession && savedSession.minutes > 0) {
+      console.log("[Earny] Recovering uncommitted session:", savedSession);
+
+      // Clear storage first to prevent duplicate commits
+      await browser.storage.local.remove("earnyUncommittedSession");
 
       // Commit the orphaned session
       const result = await spendCredits(
-        session.platform,
-        session.minutes,
-        session.videoUrl,
-        session.videoTitle
+        savedSession.platform,
+        savedSession.minutes,
+        savedSession.videoUrl,
+        savedSession.videoTitle,
+        savedSession.waived || false
       );
 
       if (result.error) {
         console.error("[Earny] Failed to commit recovered session:", result.error);
-        // Keep it in storage to retry later if it's a network error
+        // If it's a network error, save it back for retry later
         if (result.error !== "Insufficient balance" && result.error !== "Unauthorized") {
-          return;
+          await browser.storage.local.set({ earnyUncommittedSession: savedSession });
         }
       } else {
         console.log("[Earny] Successfully committed recovered session:", result);
       }
-
-      // Clear the uncommitted session
-      await browser.storage.local.remove("earnyUncommittedSession");
     }
   } catch (error) {
     console.error("[Earny] Error recovering session:", error);
+  } finally {
+    recoveryInProgress = false;
   }
 }
 
 // Save current session to storage (for crash recovery)
 async function persistSession() {
-  if (activeSession && activeSession.minutes > 0) {
-    await browser.storage.local.set({ earnyUncommittedSession: activeSession });
+  if (session && session.minutes > 0) {
+    // Get first tab's info for the commit (we'll use combined title for description)
+    const tabIds = Object.keys(session.tabs);
+    const firstTab = tabIds.length > 0 ? session.tabs[tabIds[0]] : null;
+
+    // Build combined title from all tabs
+    const titles = Object.values(session.tabs).map(t => t.videoTitle).filter(Boolean);
+    const combinedTitle = titles.join(" | ");
+
+    await browser.storage.local.set({
+      earnyUncommittedSession: {
+        platform: firstTab?.platform || "youtube",
+        videoUrl: firstTab?.videoUrl || "",
+        videoTitle: combinedTitle,
+        startTime: session.startTime,
+        minutes: session.minutes,
+        waived: waivedMode,
+      }
+    });
   } else {
     await browser.storage.local.remove("earnyUncommittedSession");
   }
@@ -100,7 +135,7 @@ async function fetchBalance() {
 }
 
 // Spend credits via API
-async function spendCredits(platform, durationMinutes, videoUrl, videoTitle) {
+async function spendCredits(platform, durationMinutes, videoUrl, videoTitle, waived = false) {
   try {
     const sessionToken = await getSessionCookie();
 
@@ -120,6 +155,7 @@ async function spendCredits(platform, durationMinutes, videoUrl, videoTitle) {
         durationMinutes,
         videoUrl,
         videoTitle,
+        waived,
       }),
     });
 
@@ -142,13 +178,13 @@ function detectPlatform(url) {
   return null;
 }
 
-// Start a new tracking session
-async function startSession(tabId) {
-  if (activeSession) {
-    console.log("[Earny] Session already active, ignoring start");
-    return;
-  }
+// Check if any tabs are playing
+function isTracking() {
+  return playingTabs.size > 0;
+}
 
+// Add a tab to tracking
+async function addPlayingTab(tabId) {
   try {
     const tab = await browser.tabs.get(tabId);
     const platform = detectPlatform(tab.url);
@@ -158,53 +194,104 @@ async function startSession(tabId) {
       return;
     }
 
-    activeSession = {
-      tabId,
+    const wasTracking = isTracking();
+    playingTabs.add(tabId);
+
+    // Initialize or update session
+    if (!session) {
+      session = {
+        startTime: Date.now(),
+        minutes: 0,
+        tabs: {},
+      };
+    }
+
+    // Store tab info
+    session.tabs[tabId] = {
       platform,
       videoUrl: tab.url,
       videoTitle: tab.title,
-      startTime: Date.now(),
-      minutes: 0,
     };
 
-    console.log("[Earny] Started session:", activeSession);
+    console.log("[Earny] Added tab", tabId, "- Total playing:", playingTabs.size);
 
-    // Set up periodic minute check
-    browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+    // Start alarm if this is the first playing tab
+    if (!wasTracking) {
+      browser.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+      console.log("[Earny] Started tracking, alarm created");
+    }
 
     await persistSession();
   } catch (error) {
-    console.error("[Earny] Error starting session:", error);
+    console.error("[Earny] Error adding tab:", error);
+  }
+}
+
+// Remove a tab from tracking
+async function removePlayingTab(tabId) {
+  if (!playingTabs.has(tabId)) {
+    return;
+  }
+
+  playingTabs.delete(tabId);
+  if (session && session.tabs[tabId]) {
+    delete session.tabs[tabId];
+  }
+
+  console.log("[Earny] Removed tab", tabId, "- Remaining:", playingTabs.size);
+
+  // If no more playing tabs, end the session
+  if (!isTracking()) {
+    await endSession("all_videos_stopped");
+  } else {
+    await persistSession();
   }
 }
 
 // End current session and commit credits
 async function endSession(reason = "ended") {
-  if (!activeSession) {
+  if (!session) {
     console.log("[Earny] No active session to end");
     return;
   }
 
-  const session = activeSession;
-  activeSession = null;
+  const sessionToCommit = session;
+  session = null;
+  playingTabs.clear();
   browser.alarms.clear("earny-minute-check");
 
   // Only commit if we have minutes to charge
-  if (session.minutes > 0) {
-    console.log(`[Earny] Committing session (${reason}):`, session.minutes, "minutes");
+  if (sessionToCommit.minutes > 0) {
+    // Get first tab's info for platform, combine titles
+    const tabInfos = Object.values(sessionToCommit.tabs);
+    const firstTab = tabInfos[0] || { platform: "youtube", videoUrl: "" };
+    const titles = tabInfos.map(t => t.videoTitle).filter(Boolean);
+    const combinedTitle = titles.join(" | ");
+
+    console.log(`[Earny] Committing session (${reason}):`, sessionToCommit.minutes, "minutes, waived:", waivedMode);
 
     const result = await spendCredits(
-      session.platform,
-      session.minutes,
-      session.videoUrl,
-      session.videoTitle
+      firstTab.platform,
+      sessionToCommit.minutes,
+      firstTab.videoUrl,
+      combinedTitle,
+      waivedMode
     );
 
     if (result.error) {
       console.error("[Earny] Failed to commit session:", result.error);
       // If it's a network error, save for recovery
       if (result.error !== "Insufficient balance" && result.error !== "Unauthorized") {
-        await browser.storage.local.set({ earnyUncommittedSession: session });
+        await browser.storage.local.set({
+          earnyUncommittedSession: {
+            platform: firstTab.platform,
+            videoUrl: firstTab.videoUrl,
+            videoTitle: combinedTitle,
+            startTime: sessionToCommit.startTime,
+            minutes: sessionToCommit.minutes,
+            waived: waivedMode,
+          }
+        });
         return;
       }
     } else {
@@ -219,16 +306,39 @@ async function endSession(reason = "ended") {
 
 // Handle alarm (minute check)
 browser.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== "earny-minute-check" || !activeSession) {
+  if (alarm.name !== "earny-minute-check" || !isTracking() || !session) {
     return;
   }
 
   // Increment session minutes
-  activeSession.minutes += 1;
-  console.log("[Earny] Minute tick, session minutes:", activeSession.minutes);
+  session.minutes += 1;
+  console.log("[Earny] Minute tick, session minutes:", session.minutes);
+
+  // Update tab titles (they may have changed)
+  for (const tabId of playingTabs) {
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (session.tabs[tabId]) {
+        session.tabs[tabId].videoTitle = tab.title;
+        session.tabs[tabId].videoUrl = tab.url;
+      }
+    } catch (e) {
+      // Tab might be closed, remove it
+      playingTabs.delete(tabId);
+      if (session.tabs[tabId]) {
+        delete session.tabs[tabId];
+      }
+    }
+  }
 
   // Persist updated session
   await persistSession();
+
+  // Skip balance check in waived mode
+  if (waivedMode) {
+    console.log("[Earny] Waived mode - skipping balance check");
+    return;
+  }
 
   // Check if user can afford to continue
   const balanceResult = await fetchBalance();
@@ -239,7 +349,7 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     return;
   }
 
-  const projectedCost = activeSession.minutes; // 1 credit per minute
+  const projectedCost = session.minutes; // 1 credit per minute
   const availableBalance = balanceResult.balance;
 
   console.log("[Earny] Balance check - available:", availableBalance, "session cost:", projectedCost);
@@ -248,11 +358,13 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   if (availableBalance <= projectedCost) {
     console.log("[Earny] Balance exhausted, committing session and blocking");
 
-    // Pause the video
-    try {
-      browser.tabs.sendMessage(activeSession.tabId, { action: "pauseVideo" });
-    } catch (e) {
-      console.error("[Earny] Failed to pause video:", e);
+    // Pause all playing videos
+    for (const tabId of playingTabs) {
+      try {
+        browser.tabs.sendMessage(tabId, { action: "pauseVideo" });
+      } catch (e) {
+        console.error("[Earny] Failed to pause video in tab", tabId, e);
+      }
     }
 
     // Commit immediately
@@ -272,35 +384,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case "videoPlaying":
         if (sender.tab) {
-          await startSession(sender.tab.id);
+          await addPlayingTab(sender.tab.id);
         }
         sendResponse({ tracking: true });
         break;
 
       case "videoPaused":
       case "videoEnded":
-        // Only end if the message is from the tab we're tracking
-        if (sender.tab && activeSession && sender.tab.id === activeSession.tabId) {
-          await endSession(message.action);
+        if (sender.tab) {
+          await removePlayingTab(sender.tab.id);
         }
-        sendResponse({ tracking: false });
+        sendResponse({ tracking: !isTracking() });
         break;
 
       case "getTrackingStatus":
-        let tabTitle = null;
-        if (activeSession) {
-          try {
-            const tab = await browser.tabs.get(activeSession.tabId);
-            tabTitle = tab?.title || null;
-          } catch (e) {
-            // Tab might be closed
+        const tabTitles = [];
+        if (session) {
+          for (const tabId of playingTabs) {
+            try {
+              const tab = await browser.tabs.get(tabId);
+              if (tab?.title) {
+                tabTitles.push(tab.title);
+              }
+            } catch (e) {
+              // Tab might be closed
+            }
           }
         }
         sendResponse({
-          isTracking: !!activeSession,
-          currentTab: activeSession?.tabId || null,
-          tabTitle,
-          accumulatedMinutes: activeSession?.minutes || 0,
+          isTracking: isTracking(),
+          playingTabs: Array.from(playingTabs),
+          tabTitles,
+          accumulatedMinutes: session?.minutes || 0,
         });
         break;
 
@@ -314,6 +429,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: true });
         break;
 
+      case "getWaivedMode":
+        sendResponse({ waived: waivedMode });
+        break;
+
+      case "setWaivedMode":
+        waivedMode = message.waived === true;
+        browser.storage.local.set({ earnyWaivedMode: waivedMode });
+        console.log("[Earny] Waived mode set to:", waivedMode);
+        sendResponse({ success: true, waived: waivedMode });
+        break;
+
       default:
         sendResponse({ error: "Unknown action" });
     }
@@ -324,19 +450,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Handle tab close
 browser.tabs.onRemoved.addListener(async (tabId) => {
-  if (activeSession && tabId === activeSession.tabId) {
-    console.log("[Earny] Tracked tab closed");
-    await endSession("tab_closed");
+  if (playingTabs.has(tabId)) {
+    console.log("[Earny] Playing tab closed:", tabId);
+    await removePlayingTab(tabId);
   }
 });
 
 // Handle tab navigation
 browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (activeSession && tabId === activeSession.tabId && changeInfo.url) {
+  if (playingTabs.has(tabId) && changeInfo.url) {
     const platform = detectPlatform(changeInfo.url);
     if (!platform) {
-      console.log("[Earny] Tab navigated away from video platform");
-      await endSession("navigated_away");
+      console.log("[Earny] Tab", tabId, "navigated away from video platform");
+      await removePlayingTab(tabId);
     }
   }
 });

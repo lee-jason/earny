@@ -8,6 +8,7 @@ const elements = {
   trackingStatus: document.getElementById("tracking-status"),
   trackingMinutes: document.getElementById("tracking-minutes"),
   trackingTitle: document.getElementById("tracking-title"),
+  waivedCheckbox: document.getElementById("waived-checkbox"),
   loginBtn: document.getElementById("login-btn"),
   dashboardBtn: document.getElementById("dashboard-btn"),
   refreshBtn: document.getElementById("refresh-btn"),
@@ -32,6 +33,16 @@ async function getTrackingStatus() {
   return browser.runtime.sendMessage({ action: "getTrackingStatus" });
 }
 
+// Get waived mode from background script
+async function getWaivedMode() {
+  return browser.runtime.sendMessage({ action: "getWaivedMode" });
+}
+
+// Set waived mode in background script
+async function setWaivedMode(waived) {
+  return browser.runtime.sendMessage({ action: "setWaivedMode", waived });
+}
+
 // Update tracking display
 async function updateTrackingDisplay() {
   const status = await getTrackingStatus();
@@ -41,9 +52,9 @@ async function updateTrackingDisplay() {
     elements.trackingMinutes.textContent = status.accumulatedMinutes;
 
     if (status.tabTitles && status.tabTitles.length > 0) {
-      // Show all playing tab titles, truncated
+      // Show all playing tab titles, each on its own line, truncated
       const titles = status.tabTitles.map(t =>
-        t.length > 35 ? t.substring(0, 35) + "..." : t
+        t.length > 40 ? t.substring(0, 40) + "..." : t
       );
       elements.trackingTitle.textContent = titles.join("\n");
     } else {
@@ -75,6 +86,10 @@ async function init() {
   showSection(elements.mainContent);
   updateTrackingDisplay();
 
+  // Load waived mode state
+  const waivedData = await getWaivedMode();
+  elements.waivedCheckbox.checked = waivedData.waived || false;
+
   // Update tracking display every second
   setInterval(updateTrackingDisplay, 1000);
 }
@@ -101,6 +116,11 @@ elements.refreshBtn.addEventListener("click", async () => {
   } else {
     elements.balance.textContent = "Error";
   }
+});
+
+// Waived checkbox
+elements.waivedCheckbox.addEventListener("change", async () => {
+  await setWaivedMode(elements.waivedCheckbox.checked);
 });
 
 // Initialize on popup open
