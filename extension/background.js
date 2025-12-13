@@ -1,24 +1,70 @@
 // Earny Background Service Worker
-// Handles balance tracking and video time deductions
+// Handles balance tracking and video time deductions with session-based commits
 
 // Import config
 importScripts("config.js");
 
 const API_BASE = CONFIG.API_BASE;
 
-// State
-let isTracking = false;
-let currentTab = null;
-let trackingStartTime = null;
-let accumulatedMinutes = 0;
+// Session state (tracked in memory and persisted to storage)
+let activeSession = null; // { platform, videoUrl, videoTitle, startTime, minutes }
+
+// Initialize: check for uncommitted session from previous run
+chrome.runtime.onStartup.addListener(recoverUncommittedSession);
+chrome.runtime.onInstalled.addListener(recoverUncommittedSession);
+
+// Also recover on service worker wake-up
+recoverUncommittedSession();
+
+// Recover and commit any uncommitted session from storage
+async function recoverUncommittedSession() {
+  try {
+    const data = await chrome.storage.local.get("earnyUncommittedSession");
+    const session = data.earnyUncommittedSession;
+
+    if (session && session.minutes > 0) {
+      console.log("[Earny] Recovering uncommitted session:", session);
+
+      // Commit the orphaned session
+      const result = await spendCredits(
+        session.platform,
+        session.minutes,
+        session.videoUrl,
+        session.videoTitle
+      );
+
+      if (result.error) {
+        console.error("[Earny] Failed to commit recovered session:", result.error);
+        // Keep it in storage to retry later if it's a network error
+        if (result.error !== "Insufficient balance" && result.error !== "Unauthorized") {
+          return;
+        }
+      } else {
+        console.log("[Earny] Successfully committed recovered session:", result);
+      }
+
+      // Clear the uncommitted session
+      await chrome.storage.local.remove("earnyUncommittedSession");
+    }
+  } catch (error) {
+    console.error("[Earny] Error recovering session:", error);
+  }
+}
+
+// Save current session to storage (for crash recovery)
+async function persistSession() {
+  if (activeSession && activeSession.minutes > 0) {
+    await chrome.storage.local.set({ earnyUncommittedSession: activeSession });
+  } else {
+    await chrome.storage.local.remove("earnyUncommittedSession");
+  }
+}
 
 // Get session cookie from the API domain
 async function getSessionCookie() {
   try {
-    // Try with URL first (works better for localhost)
     const cookies = await chrome.cookies.getAll({ url: API_BASE });
-    console.log("All cookies for", API_BASE, ":", cookies);
-    const sessionCookie = cookies.find(c => c.name === "authjs.session-token");
+    const sessionCookie = cookies.find((c) => c.name === "authjs.session-token");
     return sessionCookie?.value;
   } catch (error) {
     console.error("Error getting cookies:", error);
@@ -30,7 +76,6 @@ async function getSessionCookie() {
 async function fetchBalance() {
   try {
     const sessionToken = await getSessionCookie();
-    console.log("Session token:", sessionToken ? "found" : "not found");
 
     const headers = {};
     if (sessionToken) {
@@ -99,54 +144,121 @@ function detectPlatform(url) {
   return null;
 }
 
-// Start tracking video time
-function startTracking(tabId) {
-  if (isTracking) return;
+// Start a new tracking session
+async function startSession(tabId) {
+  if (activeSession) {
+    console.log("[Earny] Session already active, ignoring start");
+    return;
+  }
 
-  isTracking = true;
-  currentTab = tabId;
-  trackingStartTime = Date.now();
-  accumulatedMinutes = 0;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    const platform = detectPlatform(tab.url);
 
-  // Set up periodic check every minute
-  chrome.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+    if (!platform) {
+      console.log("[Earny] Not a supported platform");
+      return;
+    }
+
+    activeSession = {
+      tabId,
+      platform,
+      videoUrl: tab.url,
+      videoTitle: tab.title,
+      startTime: Date.now(),
+      minutes: 0,
+    };
+
+    console.log("[Earny] Started session:", activeSession);
+
+    // Set up periodic minute check
+    chrome.alarms.create("earny-minute-check", { periodInMinutes: 1 });
+
+    await persistSession();
+  } catch (error) {
+    console.error("[Earny] Error starting session:", error);
+  }
 }
 
-// Stop tracking (credits are already spent every minute via alarm)
-async function stopTracking() {
-  if (!isTracking) return;
+// End current session and commit credits
+async function endSession(reason = "ended") {
+  if (!activeSession) {
+    console.log("[Earny] No active session to end");
+    return;
+  }
 
+  const session = activeSession;
+  activeSession = null;
   chrome.alarms.clear("earny-minute-check");
 
-  isTracking = false;
-  currentTab = null;
-  trackingStartTime = null;
-  accumulatedMinutes = 0;
+  // Only commit if we have minutes to charge
+  if (session.minutes > 0) {
+    console.log(`[Earny] Committing session (${reason}):`, session.minutes, "minutes");
+
+    const result = await spendCredits(
+      session.platform,
+      session.minutes,
+      session.videoUrl,
+      session.videoTitle
+    );
+
+    if (result.error) {
+      console.error("[Earny] Failed to commit session:", result.error);
+      // If it's a network error, save for recovery
+      if (result.error !== "Insufficient balance" && result.error !== "Unauthorized") {
+        await chrome.storage.local.set({ earnyUncommittedSession: session });
+        return;
+      }
+    } else {
+      console.log("[Earny] Session committed successfully:", result);
+    }
+  } else {
+    console.log("[Earny] Session had 0 minutes, nothing to commit");
+  }
+
+  await chrome.storage.local.remove("earnyUncommittedSession");
 }
 
 // Handle alarm (minute check)
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === "earny-minute-check" && isTracking && currentTab) {
-    // Spend 1 credit for this minute
+  if (alarm.name !== "earny-minute-check" || !activeSession) {
+    return;
+  }
+
+  // Increment session minutes
+  activeSession.minutes += 1;
+  console.log("[Earny] Minute tick, session minutes:", activeSession.minutes);
+
+  // Persist updated session
+  await persistSession();
+
+  // Check if user can afford to continue
+  const balanceResult = await fetchBalance();
+
+  if (balanceResult.error) {
+    console.log("[Earny] Balance check failed:", balanceResult.error);
+    // On network/auth errors, keep tracking - will check again next minute
+    return;
+  }
+
+  const projectedCost = activeSession.minutes; // 1 credit per minute
+  const availableBalance = balanceResult.balance;
+
+  console.log("[Earny] Balance check - available:", availableBalance, "session cost:", projectedCost);
+
+  // If balance would go to 0 or below after committing this session, stop and commit immediately
+  if (availableBalance <= projectedCost) {
+    console.log("[Earny] Balance exhausted, committing session and blocking");
+
+    // Pause the video
     try {
-      const tab = await chrome.tabs.get(currentTab);
-      const platform = detectPlatform(tab.url);
-
-      if (platform) {
-        const result = await spendCredits(platform, 1, tab.url, tab.title);
-
-        // Only stop if insufficient balance (402 error)
-        if (result.error === "Insufficient balance" ||
-            (result.newBalance !== undefined && result.newBalance <= 0)) {
-          chrome.tabs.sendMessage(currentTab, { action: "pauseVideo" });
-          await stopTracking();
-        }
-        // For other errors (network, auth), keep tracking - will retry next minute
-      }
+      chrome.tabs.sendMessage(activeSession.tabId, { action: "pauseVideo" });
     } catch (e) {
-      // Tab might be closed
-      await stopTracking();
+      console.error("[Earny] Failed to pause video:", e);
     }
+
+    // Commit immediately
+    await endSession("balance_exhausted");
   }
 });
 
@@ -161,40 +273,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case "videoPlaying":
         if (sender.tab) {
-          startTracking(sender.tab.id);
+          await startSession(sender.tab.id);
         }
         sendResponse({ tracking: true });
         break;
 
       case "videoPaused":
       case "videoEnded":
-        // Only stop tracking if the message is from the tab we're tracking
-        if (sender.tab && sender.tab.id === currentTab) {
-          await stopTracking();
+        // Only end if the message is from the tab we're tracking
+        if (sender.tab && activeSession && sender.tab.id === activeSession.tabId) {
+          await endSession(message.action);
         }
         sendResponse({ tracking: false });
         break;
 
       case "getTrackingStatus":
-        // Get tab title if tracking
         let tabTitle = null;
-        if (isTracking && currentTab) {
+        if (activeSession) {
           try {
-            const tab = await chrome.tabs.get(currentTab);
+            const tab = await chrome.tabs.get(activeSession.tabId);
             tabTitle = tab?.title || null;
           } catch (e) {
             // Tab might be closed
           }
         }
         sendResponse({
-          isTracking,
-          currentTab,
+          isTracking: !!activeSession,
+          currentTab: activeSession?.tabId || null,
           tabTitle,
-          accumulatedMinutes:
-            accumulatedMinutes +
-            (trackingStartTime
-              ? Math.floor((Date.now() - trackingStartTime) / 60000)
-              : 0),
+          accumulatedMinutes: activeSession?.minutes || 0,
         });
         break;
 
@@ -217,18 +324,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Handle tab close
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (tabId === currentTab) {
-    stopTracking();
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  if (activeSession && tabId === activeSession.tabId) {
+    console.log("[Earny] Tracked tab closed");
+    await endSession("tab_closed");
   }
 });
 
 // Handle tab navigation
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (tabId === currentTab && changeInfo.url) {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (activeSession && tabId === activeSession.tabId && changeInfo.url) {
     const platform = detectPlatform(changeInfo.url);
     if (!platform) {
-      stopTracking();
+      console.log("[Earny] Tab navigated away from video platform");
+      await endSession("navigated_away");
     }
   }
 });

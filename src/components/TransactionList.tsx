@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 interface Transaction {
   id: string;
@@ -12,16 +12,6 @@ interface Transaction {
   createdAt: string;
 }
 
-interface CollapsedTransaction {
-  ids: string[];
-  type: "EARNING" | "SPENDING";
-  totalAmount: number;
-  descriptions: string[];
-  startTime: string;
-  endTime: string;
-  count: number;
-}
-
 interface Pagination {
   page: number;
   limit: number;
@@ -31,68 +21,6 @@ interface Pagination {
 
 interface TransactionListProps {
   filterType?: "EARNING" | "SPENDING" | null;
-}
-
-// Collapse sequential spending transactions into single rows
-function collapseTransactions(transactions: Transaction[]): (Transaction | CollapsedTransaction)[] {
-  const result: (Transaction | CollapsedTransaction)[] = [];
-  let i = 0;
-
-  while (i < transactions.length) {
-    const current = transactions[i];
-
-    // If it's a spending transaction, look for consecutive spending transactions
-    if (current.type === "SPENDING") {
-      const spendingGroup: Transaction[] = [current];
-
-      // Collect all consecutive spending transactions
-      while (
-        i + 1 < transactions.length &&
-        transactions[i + 1].type === "SPENDING"
-      ) {
-        i++;
-        spendingGroup.push(transactions[i]);
-      }
-
-      // If we have multiple spending transactions, collapse them
-      if (spendingGroup.length > 1) {
-        // Get unique descriptions
-        const uniqueDescriptions = [...new Set(
-          spendingGroup
-            .map(tx => {
-              // Extract video title from description like "YouTube: Video Title (1 min)"
-              const match = tx.description?.match(/^(YouTube|Twitch): (.+?) \(\d+ min\)$/);
-              return match ? match[2] : tx.description || tx.activityType || "Video";
-            })
-            .filter(Boolean)
-        )];
-
-        result.push({
-          ids: spendingGroup.map(tx => tx.id),
-          type: "SPENDING",
-          totalAmount: spendingGroup.reduce((sum, tx) => sum + tx.amount, 0),
-          descriptions: uniqueDescriptions as string[],
-          startTime: spendingGroup[spendingGroup.length - 1].createdAt, // Oldest
-          endTime: spendingGroup[0].createdAt, // Most recent
-          count: spendingGroup.length,
-        });
-      } else {
-        // Single spending transaction, add as-is
-        result.push(current);
-      }
-    } else {
-      // Earning transactions are not collapsed
-      result.push(current);
-    }
-
-    i++;
-  }
-
-  return result;
-}
-
-function isCollapsed(tx: Transaction | CollapsedTransaction): tx is CollapsedTransaction {
-  return "ids" in tx;
 }
 
 export function TransactionList({ filterType = null }: TransactionListProps) {
@@ -128,12 +56,6 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
   useEffect(() => {
     fetchTransactions(currentPage);
   }, [currentPage, filterType]);
-
-  // Collapse sequential spending transactions
-  const displayTransactions = useMemo(
-    () => collapseTransactions(transactions),
-    [transactions]
-  );
 
   if (loading && transactions.length === 0) {
     return (
@@ -179,88 +101,41 @@ export function TransactionList({ filterType = null }: TransactionListProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {displayTransactions.map((tx) => {
-              if (isCollapsed(tx)) {
-                // Collapsed spending transaction
-                return (
-                  <tr key={tx.ids[0]} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                      <div>
-                        {new Date(tx.endTime).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                      <div className="text-xs text-gray-400 dark:text-gray-500">
-                        {tx.count} min session
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
-                        Spent
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                      <div className="max-w-md">
-                        {tx.descriptions.slice(0, 3).map((desc, i) => (
-                          <span key={i}>
-                            {i > 0 && ", "}
-                            <span className="truncate">{desc}</span>
-                          </span>
-                        ))}
-                        {tx.descriptions.length > 3 && (
-                          <span className="text-gray-500 dark:text-gray-400">
-                            {" "}+{tx.descriptions.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right text-red-600 dark:text-red-400">
-                      {tx.totalAmount.toLocaleString()}
-                    </td>
-                  </tr>
-                );
-              } else {
-                // Regular transaction
-                return (
-                  <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(tx.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          tx.type === "EARNING"
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
-                        }`}
-                      >
-                        {tx.type === "EARNING" ? "Earned" : "Spent"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                      {tx.description || tx.activityType || "—"}
-                    </td>
-                    <td
-                      className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
-                        tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {tx.amount > 0 ? "+" : ""}
-                      {tx.amount.toLocaleString()}
-                    </td>
-                  </tr>
-                );
-              }
-            })}
+            {transactions.map((tx) => (
+              <tr key={tx.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {new Date(tx.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      tx.type === "EARNING"
+                        ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                        : "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300"
+                    }`}
+                  >
+                    {tx.type === "EARNING" ? "Earned" : "Spent"}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                  {tx.description || tx.activityType || "—"}
+                </td>
+                <td
+                  className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
+                    tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  {tx.amount > 0 ? "+" : ""}
+                  {tx.amount.toLocaleString()}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
