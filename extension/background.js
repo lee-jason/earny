@@ -185,11 +185,11 @@ function isTracking() {
   return playingTabs.size > 0;
 }
 
-// Update the extension badge to show number of playing tabs
+// Update the extension badge to show session minutes
 function updateBadge() {
-  const count = playingTabs.size;
-  if (count > 0) {
-    chrome.action.setBadgeText({ text: String(count) });
+  const minutes = session?.minutes || 0;
+  if (isTracking() || minutes > 0) {
+    chrome.action.setBadgeText({ text: String(minutes) });
     chrome.action.setBadgeBackgroundColor({ color: "#6366f1" });
   } else {
     chrome.action.setBadgeText({ text: "" });
@@ -329,6 +329,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
   // Increment session minutes
   session.minutes += 1;
+  updateBadge();
   console.log("[Earny] Minute tick, session minutes:", session.minutes);
 
   // Update tab titles (they may have changed)

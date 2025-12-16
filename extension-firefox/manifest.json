@@ -3,6 +3,7 @@
   "name": "Earny - Fitness Credit Tracker",
   "version": "1.0.0",
   "description": "Track your fitness credits and spend them watching YouTube and Twitch",
+  "homepage_url": "https://earny-red.vercel.app/privacy",
   "permissions": [
     "storage",
     "tabs",
@@ -10,7 +11,6 @@
     "cookies",
     "https://www.youtube.com/*",
     "https://www.twitch.tv/*",
-    "http://localhost:3000/*",
     "https://earny-red.vercel.app/*"
   ],
   "browser_action": {
@@ -41,7 +41,7 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "earny@example.com",
+      "id": "77242f01-a203-47e5-ab4c-1fac4a5b9af5",
       "strict_min_version": "109.0"
     }
   }
