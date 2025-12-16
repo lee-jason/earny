@@ -73,6 +73,32 @@ async function updateTrackingDisplay() {
   }
 }
 
+// Update balance display accounting for uncommitted session
+async function updateBalanceDisplay() {
+  const balanceData = await fetchBalance();
+
+  if (balanceData.error === "Not logged in") {
+    showSection(elements.notLoggedIn);
+    return;
+  }
+
+  if (balanceData.error) {
+    elements.balance.textContent = "Error";
+    return;
+  }
+
+  const status = await getTrackingStatus();
+  const waivedData = await getWaivedMode();
+
+  // Subtract accumulated minutes if tracking and not in waived mode
+  let displayBalance = balanceData.balance;
+  if (status.isTracking && status.accumulatedMinutes > 0 && !waivedData.waived) {
+    displayBalance = Math.max(0, balanceData.balance - status.accumulatedMinutes);
+  }
+
+  elements.balance.textContent = displayBalance.toLocaleString();
+}
+
 // Initialize popup
 async function init() {
   showSection(elements.loading);
@@ -90,16 +116,21 @@ async function init() {
     return;
   }
 
-  elements.balance.textContent = balanceData.balance.toLocaleString();
   showSection(elements.mainContent);
-  updateTrackingDisplay();
 
   // Load waived mode state
   const waivedData = await getWaivedMode();
   elements.waivedCheckbox.checked = waivedData.waived || false;
 
-  // Update tracking display every second
-  setInterval(updateTrackingDisplay, 1000);
+  // Initial display updates
+  await updateBalanceDisplay();
+  await updateTrackingDisplay();
+
+  // Update displays every 5 seconds
+  setInterval(() => {
+    updateTrackingDisplay();
+    updateBalanceDisplay();
+  }, 5000);
 }
 
 // Login button

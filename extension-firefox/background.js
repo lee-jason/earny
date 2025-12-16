@@ -4,6 +4,9 @@
 // CONFIG is loaded via manifest.json before this script
 const API_BASE = CONFIG.API_BASE;
 
+// Log when background script loads (helps detect restarts after suspension)
+console.log("[Earny] Background script loaded at", new Date().toISOString());
+
 // Session state (tracked in memory and persisted to storage)
 // playingTabs: Set of tab IDs currently playing video
 // session: { startTime, minutes, tabs: { tabId: { platform, videoUrl, videoTitle } } }
@@ -183,6 +186,17 @@ function isTracking() {
   return playingTabs.size > 0;
 }
 
+// Update the extension badge to show number of playing tabs
+function updateBadge() {
+  const count = playingTabs.size;
+  if (count > 0) {
+    browser.browserAction.setBadgeText({ text: String(count) });
+    browser.browserAction.setBadgeBackgroundColor({ color: "#6366f1" });
+  } else {
+    browser.browserAction.setBadgeText({ text: "" });
+  }
+}
+
 // Add a tab to tracking
 async function addPlayingTab(tabId) {
   try {
@@ -196,6 +210,7 @@ async function addPlayingTab(tabId) {
 
     const wasTracking = isTracking();
     playingTabs.add(tabId);
+    updateBadge();
 
     // Initialize or update session
     if (!session) {
@@ -234,6 +249,7 @@ async function removePlayingTab(tabId) {
   }
 
   playingTabs.delete(tabId);
+  updateBadge();
 
   console.log("[Earny] Removed tab", tabId, "- Remaining:", playingTabs.size);
 
@@ -259,6 +275,7 @@ async function endSession(reason = "ended") {
   const sessionToCommit = session;
   session = null;
   playingTabs.clear();
+  updateBadge();
   browser.alarms.clear("earny-minute-check");
 
   // Only commit if we have minutes to charge

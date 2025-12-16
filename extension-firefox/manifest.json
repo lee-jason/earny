@@ -30,7 +30,7 @@
   },
   "background": {
     "scripts": ["config.js", "background.js"],
-    "persistent": false
+    "persistent": true
   },
   "content_scripts": [
     {

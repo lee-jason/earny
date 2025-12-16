@@ -67,9 +67,9 @@ function startVideoPolling() {
   }
 
   console.log("[Earny] Starting video polling");
-  // Check immediately, then every 2 seconds
+  // Check immediately, then every 5 seconds
   checkVideoState();
-  videoCheckInterval = setInterval(checkVideoState, 2000);
+  videoCheckInterval = setInterval(checkVideoState, 5000);
 }
 
 // Stop polling

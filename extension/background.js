@@ -185,6 +185,17 @@ function isTracking() {
   return playingTabs.size > 0;
 }
 
+// Update the extension badge to show number of playing tabs
+function updateBadge() {
+  const count = playingTabs.size;
+  if (count > 0) {
+    chrome.action.setBadgeText({ text: String(count) });
+    chrome.action.setBadgeBackgroundColor({ color: "#6366f1" });
+  } else {
+    chrome.action.setBadgeText({ text: "" });
+  }
+}
+
 // Add a tab to tracking
 async function addPlayingTab(tabId) {
   try {
@@ -198,6 +209,7 @@ async function addPlayingTab(tabId) {
 
     const wasTracking = isTracking();
     playingTabs.add(tabId);
+    updateBadge();
 
     // Initialize or update session
     if (!session) {
@@ -236,6 +248,7 @@ async function removePlayingTab(tabId) {
   }
 
   playingTabs.delete(tabId);
+  updateBadge();
 
   console.log("[Earny] Removed tab", tabId, "- Remaining:", playingTabs.size);
 
@@ -261,6 +274,7 @@ async function endSession(reason = "ended") {
   const sessionToCommit = session;
   session = null;
   playingTabs.clear();
+  updateBadge();
   chrome.alarms.clear("earny-minute-check");
 
   // Only commit if we have minutes to charge
