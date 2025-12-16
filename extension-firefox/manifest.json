@@ -41,8 +41,9 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "77242f01-a203-47e5-ab4c-1fac4a5b9af5",
-      "strict_min_version": "109.0"
+      "id": "{77242f01-a203-47e5-ab4c-1fac4a5b9af5}",
+      "strict_min_version": "109.0",
+      "update_url": "https://earny-red.vercel.app/extensions/updates.json"
     }
   }
 }

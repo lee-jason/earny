@@ -15,22 +15,36 @@ export function Navbar() {
             <Link href="/" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
               Earny
             </Link>
-            {session && (
-              <div className="ml-10 flex items-center space-x-4">
-                <Link
-                  href="/dashboard"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/ledger"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Ledger
-                </Link>
-              </div>
-            )}
+            <div className="ml-10 flex items-center space-x-4">
+              {session && (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href="/ledger"
+                    className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    Ledger
+                  </Link>
+                </>
+              )}
+              <Link
+                href="/download"
+                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Download
+              </Link>
+              <Link
+                href="/privacy"
+                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Privacy
+              </Link>
+            </div>
           </div>
           <div className="flex items-center">
             {status === "loading" ? (
