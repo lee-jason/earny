@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { BalanceDisplay } from "@/components/BalanceDisplay";
 import { ActivityLogger } from "@/components/ActivityLogger";
 import { TransactionList } from "@/components/TransactionList";
+import { DailyChart } from "@/components/DailyChart";
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -51,9 +52,15 @@ export default function DashboardPage() {
           <ActivityLogger onSuccess={handleActivitySuccess} />
         </div>
 
-        <div className="lg:col-span-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h2>
-          <TransactionList key={`transactions-${refreshKey}`} />
+        <div className="lg:col-span-2 space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Daily Activity</h2>
+            <DailyChart key={`chart-${refreshKey}`} />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Recent Activity</h2>
+            <TransactionList key={`transactions-${refreshKey}`} />
+          </div>
         </div>
       </div>
     </div>
