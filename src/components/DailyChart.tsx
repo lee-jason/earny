@@ -90,7 +90,10 @@ export function DailyChart({ days = 30 }: DailyChartProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/transactions/daily?days=${days}`);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch(
+        `/api/transactions/daily?days=${days}&timezone=${encodeURIComponent(timezone)}`
+      );
       if (res.ok) {
         const json = await res.json();
         setData(json.dailyData);
